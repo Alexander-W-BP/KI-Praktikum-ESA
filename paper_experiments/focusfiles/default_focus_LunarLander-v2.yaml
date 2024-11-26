@@ -1,0 +1,48 @@
+ENVIRONMENT: LunarLander-v2
+AVAILABLE_CONCEPTS:
+  objects:
+  - Lander
+  - LandingPad
+  actions:
+  - NOOP
+  - FIRE
+  - UP
+  - RIGHT
+  - LEFT
+  properties:
+  - POSITION:
+      in:
+      - OBJECT
+      description: get the position for given object
+  - POSITION_HISTORY:
+      in:
+      - OBJECT
+      description: get the current and last position for given object
+  - VELOCITY:
+      in:
+      - POSITION_HISTORY
+      description: velocity of object
+  - ORIENTATION:
+      in:
+      - OBJECT
+      description: get the orientation for given object
+  - RGB:
+      in:
+      - OBJECT
+      description: get the rgb value for given object
+  functions:
+  - DISTANCE:
+      in:
+      - POSITION
+      - POSITION
+      description: distance between two coordinates
+  - EUCLIDEAN_DISTANCE:
+      in:
+      - POSITION
+      - POSITION
+      description: euclidean distance between two coordinates
+  - CENTER:
+      in:
+      - POSITION
+      - POSITION
+      description: center position of two objects
