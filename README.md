@@ -1,4 +1,22 @@
 # Successive Concept Bottleneck Agent SCoBot
+## Prerequirements For Installation
+1. The first step is to clone the git repository on your own device. Therefore, navigate into a specific folder via comand line. Then execute the follwoing comand.
+```bash
+git clone https://github.com/Alexander-W-BP/KI-Praktikum-ESA.git
+```
+
+2. Now we need to copy the resources folder from quentin inside the project.
+
+3. The last step comprises the installation of all required dependencies. Therefore, navigate into the top root folder of the project: ```KI-Praktikum-ESA```. Then execute the following comands in the exact order.
+```bash
+py -3.11 -m venv env
+env\Scripts\activate
+pip install -r requirements.txt
+pip install stable-baselines3
+pip install gymnasium[atari]
+pip install ipdb
+```
+
 ## Installation And Requirements
 Scobots needs OCAtari and the local var ```'SCOBI_OBJ_EXTRACTOR'``` set as either ```OC_Atari``` or ```Noisy_OC_Atari```. If not set it will automatically resort to ```OC_Atari```. Python version ```3.8.x``` is recommended if planning to use our RGB agents.
 
