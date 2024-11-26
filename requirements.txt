@@ -1,0 +1,21 @@
+gymnasium[atari, accept-rom-license] == 0.28.1
+rtpt
+termcolor
+torch==2.0.1
+torchinfo
+numpy==1.24.4
+opencv_python
+joblib
+tensorboard
+tqdm
+rich
+pandas
+pyyaml
+colormath
+yacs
+captum
+notebook
+ocatari @ git+https://github.com/k4ntz/OC_Atari@asterix
+huggingface_hub
+joblib
+mujoco-py<2.2,>=2.1
