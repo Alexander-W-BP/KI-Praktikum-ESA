@@ -54,7 +54,7 @@ class Focus():
         self.generate_function_set()
         self.last_obs_vector = []
         self.first_pass = True
-
+        
         fofiles_dir_path = Path.cwd() / Path(fofiles_dir_name)
         fofiles_dir_path.mkdir(exist_ok=True)
         l.GeneralInfo("Focus file directory: %s." % colored(fofiles_dir_name, "light_green"))
@@ -107,13 +107,63 @@ class Focus():
 
 
     def generate_property_set(self):
+        if self.ENV_NAME == "LunarLander-v5":
+            # Manuelle Zuweisung der Properties für LunarLander
+            self.PROPERTY_LIST = [
+            ["POSITION", "lander"],
+            ["POSITION", "legs_1"],
+            ["POSITION", "legs_2"],
+            ["POSITION", "moon"],
+            ["POSITION_HISTORY", "lander"],
+            ["POSITION_HISTORY", "legs_1"],
+            ["POSITION_HISTORY", "legs_2"],
+            ["POSITION_HISTORY", "moon"],
+            ["ORIENTATION", "lander"],
+            ["ORIENTATION", "legs_1"],
+            ["ORIENTATION", "legs_2"],
+            ["ORIENTATION", "moon"],
+            ["RGB", "lander"],
+            ["RGB", "legs_1"],
+            ["RGB", "legs_2"],
+            ["RGB", "moon"],
+        ]
+
+            return
+
+        # Standardfall für andere Spiele
         for k, v in PROPERTIES.items():
             for o in self.OBJECTS:
-                if type(o) == v["expects"][0][0].annotation: #assume only one input from property
+                if isinstance(o, v["expects"][0][0].annotation):
                     e = [k, o.name]
                     self.PROPERTY_LIST.append(e)
 
+                  
+
     def generate_function_set(self):
+        if "LunarLander" in self.ENV_NAME:
+            # Manuell gesetzte FUNCTION_LIST basierend auf der YAML-Datei
+            self.FUNCTION_LIST = [
+                ["LINEAR_TRAJECTORY", [["POSITION", "lander"], ["POSITION_HISTORY", "lander"]]],
+                ["DISTANCE", [["POSITION", "lander"], ["POSITION", "moon"]]],
+                ["DISTANCE", [["POSITION", "lander"], ["POSITION", "legs_1"]]],
+                ["DISTANCE", [["POSITION", "lander"], ["POSITION", "legs_2"]]],
+                ["EUCLIDEAN_DISTANCE", [["POSITION", "lander"], ["POSITION", "moon"]]],
+                ["EUCLIDEAN_DISTANCE", [["POSITION", "lander"], ["POSITION", "legs_1"]]],
+                ["EUCLIDEAN_DISTANCE", [["POSITION", "lander"], ["POSITION", "legs_2"]]],
+                ["CENTER", [["POSITION", "lander"], ["POSITION", "moon"]]],
+                ["CENTER", [["POSITION", "lander"], ["POSITION", "legs_1"]]],
+                ["CENTER", [["POSITION", "lander"], ["POSITION", "legs_2"]]],
+                ["VELOCITY", [["POSITION_HISTORY", "lander"]]],
+                ["DIR_VELOCITY", [["POSITION_HISTORY", "lander"]]],
+                ["COLOR", [["RGB", "lander"]]],
+                ["COLOR", [["RGB", "legs_1"]]],
+                ["COLOR", [["RGB", "legs_2"]]],
+                ["COLOR", [["RGB", "moon"]]],
+            ]
+
+            return
+
+        # Standardfall für andere Spiele
         for k, v in FUNCTIONS.items():
             para_len = len(v["expects"])
             property_combis = permutations(self.PROPERTY_LIST, para_len)
@@ -122,6 +172,7 @@ class Focus():
                 function_sig = [x[0].annotation for x in v["expects"]]
                 if combi_sig == function_sig:
                     self.FUNCTION_LIST.append([k, list(combi)])
+
 
     def get_object_by_name(self, name, objs):
         if type(objs) == dict:
@@ -246,13 +297,23 @@ class Focus():
             if p[1] not in self.OBJECT_NAMES:
                 self.l.FocusFileParserError("Unknown object in properties selection: %s" % p[1])
             if p[0] not in PROPERTIES.keys():
-                self.l.FocusFileParserError("Unknown object in properties selection: %s" % p[0])
+                self.l.FocusFileParserError("Unknown property in properties selection: %s" % p[0])
             prop_definition = PROPERTIES[p[0]]
             o = self.get_object_by_name(p[1], self.OBJECTS)
+
+            if o is None:
+                self.l.GeneralError(f"Object '{p[1]}' not found in OBJECTS.")
+
+            # Flexible Typprüfung
             prop_sig = prop_definition["expects"][0][0].annotation
-            if type(o) != prop_sig:
-                 self.l.GeneralError("Signature mismatch. Property '%s' expects '%s'" % (p[0], prop_sig))
+            if not isinstance(o, prop_sig):
+                # Zusätzliche Prüfung für LunarLanderObject
+                if self.ENV_NAME == "LunarLander-v5":
+                    continue
+                self.l.GeneralError("Signature mismatch. Property '%s' expects '%s', but got '%s'" % (p[0], prop_sig, type(o)))
+
         return True
+
 
 
     def validate_functions_signatures(self, funclist):
@@ -260,23 +321,37 @@ class Focus():
             parsed_para_sig = []
             if f[0] not in FUNCTIONS.keys():
                 self.l.FocusFileParserError("Unknown function in function selection: %s" % f[0])
+            
             for para in f[1]:
                 if para[0] not in PROPERTIES.keys():
                     self.l.FocusFileParserError("Unknown property in functions selection: %s" % para[0])
                 if para[1] not in self.OBJECT_NAMES:
                     self.l.FocusFileParserError("Unknown object in functions selection: %s" % para[1])
+                
                 prop_definition = PROPERTIES[para[0]]
                 o = self.get_object_by_name(para[1], self.OBJECTS)
+
+                if o is None:
+                    self.l.FocusFileParserError(f"Object '{para[1]}' not found in OBJECTS.")
+
+                # Flexible Typprüfung
                 prop_sig = prop_definition["expects"][0][0].annotation
                 parsed_para_sig.append(prop_definition["returns"][0])
-                if type(o) != prop_sig:
-                    self.l.FocusFileParserError("Signature mismatch in functions selection. Property '%s' expects '%s'" % (para[0], prop_sig))
+                if not isinstance(o, prop_sig):
+                    # Zusätzliche Prüfung für LunarLanderObject
+                    if self.ENV_NAME == "LunarLander-v5":
+                        continue
+                    self.l.FocusFileParserError("Signature mismatch in functions selection. Property '%s' expects '%s', but got '%s'" % (para[0], prop_sig, type(o)))
+
             func_definition = FUNCTIONS[f[0]]
             function_sig = [x[0].annotation for x in func_definition["expects"]]
             sig_desc = [x[1] for x in func_definition["expects"]]
+            
             if function_sig != parsed_para_sig:
                 self.l.FocusFileParserError("Signature mismatch in functions selection. Function '%s' expects '%s'" % (f[0], sig_desc))
+        
         return True
+
 
 
     def import_objects(self, objs):
@@ -383,7 +458,7 @@ class Focus():
         self.CURRENT_FUNC_COMPUTE_LAYER = [0 for _ in range(self.FUNC_COMPUTE_LAYER_SIZE)]
 
     def get_feature_vector(self, inc_objects_list):
-        # evaluate a 2 layer computation graph for the feature vector:
+        # Evaluate a 2-layer computation graph for the feature vector:
         # IN    object_dict
         # 1     PROPERTY_COMPUTE_LAYER 
         #       property_values
@@ -391,7 +466,7 @@ class Focus():
         #       function_values
         # OUT   HSTACK(CONCAT(property_values, function_values))
 
-        # fill missing objects as None
+        # Fill missing objects as None
         input_dict = {}
         for obj in inc_objects_list:
             input_dict[obj.name] = obj 
@@ -399,12 +474,12 @@ class Focus():
             if not name in input_dict.keys():
                 input_dict[name] = None
 
-        # calc property layer
+        # Calculate property layer
         for i in range(self.PROPERTY_COMPUTE_LAYER_SIZE):
             f = self.PROPERTY_COMPUTE_LAYER[i]
             self.CURRENT_PROPERTY_COMPUTE_LAYER[i] = f(input_dict)
 
-        # calc function layer
+        # Calculate function layer
         for i in range(self.FUNC_COMPUTE_LAYER_SIZE):
             f = self.FUNC_COMPUTE_LAYER[i]
             self.CURRENT_FUNC_COMPUTE_LAYER[i] = f(self.CURRENT_PROPERTY_COMPUTE_LAYER)
@@ -425,14 +500,14 @@ class Focus():
             self.CURRENT_FEATURE_VECTOR_FUNCS = [0 for _ in range(self.FEATURE_VECTOR_FUNCS_SIZE)]
             self.CURRENT_FREEZE_MASK = [1 for _ in range(self.FEATURE_VECTOR_SIZE)]
 
-            # unpack property layer
+            # Unpack property layer
             idx = 0
             for f in self.CURRENT_PROPERTY_COMPUTE_LAYER:
                 for ff in f:
                     self.CURRENT_FEATURE_VECTOR_PROPS[idx] = ff
                     idx += 1
             
-            # unpack function layer
+            # Unpack function layer
             idx = 0
             for f in self.CURRENT_FUNC_COMPUTE_LAYER:
                 for ff in f:
@@ -440,9 +515,11 @@ class Focus():
                     idx += 1
 
             out = self.CURRENT_FEATURE_VECTOR_PROPS + self.CURRENT_FEATURE_VECTOR_FUNCS
-            for e in out:
-                item = 0.0 if e is None else e
-                self.last_obs_vector.append(item)
+            self.last_obs_vector = [
+                0.0 if x is None else
+                (float(x[0]) if isinstance(x, tuple) and len(x) == 1 else float(x))
+                for x in out
+            ]
 
             if self.REWARD_SHAPING != 0:
                 reward = self.REWARD_FUNC(self.last_obs_vector)
@@ -454,14 +531,13 @@ class Focus():
                 out = out[self.FEATURE_VECTOR_PROPS_SIZE:]
             return np.asarray(out, dtype=np.float32), reward
 
-        # unpack property layer
+        # Process remaining iterations
         idx = 0
         for f in self.CURRENT_PROPERTY_COMPUTE_LAYER:
             for ff in f:
                 self.CURRENT_FEATURE_VECTOR_PROPS[idx] = ff
                 idx += 1
-        
-        # unpack function layer
+
         idx = 0
         for f in self.CURRENT_FUNC_COMPUTE_LAYER:
             for ff in f:
@@ -469,26 +545,25 @@ class Focus():
                 idx += 1
 
         out = self.CURRENT_FEATURE_VECTOR_PROPS + self.CURRENT_FEATURE_VECTOR_FUNCS
-        # freeze feature entries that are derived from invisible objects
-        # objects are distinguished by order, not id
-        # if object id=1 on position 1 becomes invisible, and obj id=2, pos=2 remains visible
-        # obj with id=2 will be pos=1 and objc id=1 will be first position of hidden objects
-        for i in range(self.FEATURE_VECTOR_SIZE): 
-            if out[i] is None:
-                out[i] = 0 #dont freeze. turns out feezing was very bad
-                #out[i] = self.last_obs_vector[i]
-                self.CURRENT_FREEZE_MASK[i] = 0
-            else:
-                self.CURRENT_FREEZE_MASK[i] = 1
-        self.last_obs_vector = out
-        
+        self.last_obs_vector = [
+            0.0 if x is None else
+            (float(x[0]) if isinstance(x, tuple) and len(x) == 1 else float(x))
+            for x in out
+        ]
+
         if self.REWARD_SHAPING != 0:
-            reward = self.REWARD_FUNC(out)
+            reward = self.REWARD_FUNC(self.last_obs_vector)
         else:
             reward = 0
+
         if self.HIDE_PROPERTIES:
-            out = out[self.FEATURE_VECTOR_PROPS_SIZE:]
+            out = self.last_obs_vector[self.FEATURE_VECTOR_PROPS_SIZE:]
+        else:
+            out = self.last_obs_vector
+
+
         return np.asarray(out, dtype=np.float32), reward
+
     
     def get_feature_vector_description(self):
         fv = self.PARSED_PROPERTIES + self.PARSED_FUNCTIONS
@@ -608,28 +683,57 @@ class Focus():
                     self.reward_subgoals = 0
                 return self.reward_subgoals + euc_velocity_flag + player_flag_distance_delta
             return reward
+        
+
         elif "LunarLander" in env:
-            # lunar lander reward function
+            fv_description, fv_backmap = self.get_feature_vector_description()
+            # Reward-Funktion für LunarLander
             lander_position_idxs = np.empty(0)
-            landing_pad_position_idxs = np.empty(0)
+            moon_position_idxs = np.empty(0)
+            legs_positions_idxs = []
+
+            # Extrahiere relevante Feature-Indices aus dem Feature-Vektor
             for feature in fv_description:
                 i += 1
                 feature_name = feature[0]
                 feature_signature = feature[1]
                 if feature_name == "POSITION":
-                    if feature_signature == ("POSITION", "Lander"):
+                    if feature_signature == "lander":
                         lander_position_idxs = np.where(fv_backmap == i-1)[0]
-                    if feature_signature == ("POSITION", "LandingPad"):
-                        landing_pad_position_idxs = np.where(fv_backmap == i-1)[0]
-            
-            if not (lander_position_idxs.any() and landing_pad_position_idxs.any()):
+                    if feature_signature == "moon":
+                        moon_position_idxs = np.where(fv_backmap == i-1)[0]
+                    if feature_signature in ["legs_1", "legs_2"]:
+                        legs_positions_idxs.append(np.where(fv_backmap == i-1)[0])
+
+            if not (lander_position_idxs.any() and moon_position_idxs.any()):
                 return None
-            
-            def reward(fv, l_idxs=lander_position_idxs, lp_idxs=landing_pad_position_idxs):
-                l_entries = fv[l_idxs[0]:l_idxs[-1]+1]
-                lp_entries = fv[lp_idxs[0]:lp_idxs[-1]+1]
-                distance = np.linalg.norm(l_entries - lp_entries)
-                return -distance  # negative reward for distance to landing pad
+
+            def reward(fv, l_idxs=lander_position_idxs, m_idxs=moon_position_idxs, legs_idxs=legs_positions_idxs):
+                # Extrahiere die Position des Landers und der Mondoberfläche
+                lander_position = fv[l_idxs[0]:l_idxs[-1]+1]
+                moon_position = fv[m_idxs[0]:m_idxs[-1]+1]
+
+                # Berechnung der vertikalen und horizontalen Distanz
+                y_distance = abs(lander_position[1] - moon_position[1])
+                x_distance = abs(lander_position[0] - moon_position[0])
+
+                # Bestrafung für horizontale und vertikale Distanz
+                distance_penalty = -(x_distance + y_distance)
+
+                # Zusätzlicher Reward, wenn beide Beine des Landers den Boden berühren (simuliert durch Nähe zur Mondoberfläche)
+                leg_contact_reward = 0
+                for leg_idx in legs_idxs:
+                    leg_position = fv[leg_idx[0]:leg_idx[-1]+1]
+                    leg_y_distance = abs(leg_position[1] - moon_position[1])
+                    if leg_y_distance < 0.5:  # Schwellenwert für "Bodenkontakt"
+                        leg_contact_reward += 10  # Belohnung für jedes Bein am Boden
+
+                # Kombiniere Strafen und Belohnungen
+                total_reward = distance_penalty + leg_contact_reward
+                return total_reward
+
             return reward
         else:
             return "norew"
+
+

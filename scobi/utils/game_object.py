@@ -119,3 +119,63 @@ class NoisyOCAGameObject(OCAGameObject):
             return (x_old, y_old), (x_old, y_old)
         else:
             return (x, y), (x_old, y_old)
+        
+
+class LunarLanderObject(GameObjectInterface):
+    def __init__(self, name, position):
+        self._name = name
+        self._position = position
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def xy(self):
+        # In LunarLander verwenden wir die Position als Ersatz für xy
+        return self._position
+
+    @property
+    def h_coords(self):
+        # Für LunarLander keine Historie, daher Dummy-Werte oder Position zurückgeben
+        return (self._position, self._position)
+
+    @property
+    def rgb(self):
+        # Dummy-Wert für Farben, falls nicht relevant
+        return (255, 255, 255)
+
+    @property
+    def orientation(self):
+        # Standardwert für Orientation, wenn keine verfügbar ist
+        return 0,
+
+    @property
+    def w(self):
+        # Breite als Dummy, da sie nicht benötigt wird
+        return 1
+
+    @property
+    def h(self):
+        # Höhe als Dummy, da sie nicht benötigt wird
+        return 1
+
+    @property
+    def xywh(self):
+        # Kombiniere xy, Breite und Höhe
+        return (*self.xy, self.w, self.h)
+
+    @property
+    def category(self):
+        # Platzhalterwert, da LunarLander kein direktes Kategorie-Attribut hat
+        return "LunarLanderObject"
+
+    @property
+    def number(self):
+        # Einfache Implementierung: Rückgabe von 1 (oder verwende eine eindeutige ID)
+        return 1
+
+    @number.setter
+    def number(self, value):
+        # Falls `number` gesetzt werden muss, kannst du dies hier speichern
+        pass  

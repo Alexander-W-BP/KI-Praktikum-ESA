@@ -68,6 +68,8 @@ class SaveBestModelCallback(BaseCallback):
         super(SaveBestModelCallback, self).__init__()
         self.save_path = save_path
         self.rgb = rgb
+        print("Wie bin ich hier gelandet?")
+        print(self.save_path)
         self.vec_path_name = os.path.join(self.save_path, "best_vecnormalize.pkl")
 
     def _init_callback(self) -> None:
@@ -75,9 +77,16 @@ class SaveBestModelCallback(BaseCallback):
             os.makedirs(self.save_path, exist_ok=True)
 
     def _on_step(self) -> bool:
+        print("SaveBestModelCallback triggered")
         if not self.rgb:
-            self.model.get_vec_normalize_env().save(self.vec_path_name)
+            vec_env = self.model.get_vec_normalize_env()
+            if vec_env is None:
+                print("VecNormalize is None. Cannot save best_vecnormalize.pkl.")
+            else:
+                vec_env.save(self.vec_path_name)
+                print(f"Saved VecNormalize to {self.vec_path_name}")
         self.model.save(os.path.join(self.save_path, "best_model"))
+        return True
 
 def linear_schedule(initial_value: float) -> Callable[[float], float]:
     def func(progress_remaining: float) -> float:
@@ -195,7 +204,8 @@ def main():
                               silent=silent,
                               reward=flags_dictionary["reward"],
                               refresh_yaml=refresh)
-            env = EpisodicLifeEnv(env=env)
+            if hasattr(env.unwrapped, "ale") and env.unwrapped.ale is not None: 
+                env = EpisodicLifeEnv(env=env)
             env = Monitor(env)
             env.reset(seed=seed + rank)
             return env
@@ -236,7 +246,7 @@ def main():
         del monitor
         # silent init and dont refresh default yaml file because it causes spam and issues with multiprocessing
         eval_env = VecNormalize(SubprocVecEnv([make_eval_env(rank=i, seed=eval_env_seed, silent=True, refresh=False) for i in range(n_eval_envs)], start_method=MULTIPROCESSING_START_METHOD), norm_reward=False, training=False)
-        train_env = VecNormalize(SubprocVecEnv([make_env(rank=i, seed=int(flags_dictionary["seed"]), silent=True, refresh=False) for i in range(n_envs)], start_method=MULTIPROCESSING_START_METHOD), norm_reward=False)
+        train_env = VecNormalize(SubprocVecEnv([make_env(rank=i, seed=int(flags_dictionary["seed"]), silent=True, refresh=False) for i in range(n_envs)], start_method=MULTIPROCESSING_START_METHOD), norm_obs=True, norm_reward=True)
 
     rtpt_iters = training_timestamps // rtpt_frequency
     save_bm = SaveBestModelCallback(ckpt_path, rgb=flags_dictionary["rgb_exp"])

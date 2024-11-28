@@ -17,7 +17,7 @@ from viper_extract import DTClassifierModel
 import utils.parser.parser
 from scobi import Environment
 
-print("test")
+
 def flist(l):
     return ["%.2f" % e for e in l]
 
