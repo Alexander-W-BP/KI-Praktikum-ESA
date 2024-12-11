@@ -155,18 +155,21 @@ def main():
     n_eval_envs = 4
     n_eval_episodes = 8
     eval_env_seed = (int(flags_dictionary["seed"]) + 42) * 2 #different seeds for eval
-    training_timestamps = 20_000_000
-    checkpoint_frequency = 1_000_000
-    eval_frequency = 500_000
-    rtpt_frequency = 100_000
+    training_timestamps = 20_000
+    checkpoint_frequency = 1_000
+    eval_frequency = 500
+    rtpt_frequency = 100
 
     log_path = _get_directory(Path("resources/training_logs"), exp_name)
     ckpt_path = _get_directory(Path("resources/checkpoints"), exp_name)
     log_path.mkdir(parents=True, exist_ok=True)
     ckpt_path.mkdir(parents=True, exist_ok=True)
     if flags_dictionary["pruned_ff_name"] is None :
+        print("No focus file provided, training on full feature set")
         focus_dir = ckpt_path
+        print("Focus Directory: ", focus_dir)
     else:
+        print(f"Training on focus file {flags_dictionary['pruned_ff_name']}")
         focus_dir = flags_dictionary["focus_dir"]
 
     yaml_path = Path(ckpt_path, f"{exp_name}_training_status.yaml")
@@ -221,6 +224,9 @@ def main():
 
     # preprocessing based on atari wrapper of the openai baseline implementation (https://github.com/openai/baselines/blob/master/baselines/ppo1/run_atari.py)
     if flags_dictionary["rgb"]:
+
+        print("RGB space used")
+
         # NoopResetEnv not required, because v5 has sticky actions, and also frame_skip=5, so also not required to set in wrapper (1 means no frameskip). no reward clipping, because scobots dont clip as well
         train_wrapper_params = {"noop_max" : 0, "frame_skip" : 1, "screen_size": 84, "terminal_on_life_loss": True, "clip_reward" : False} # remaining values are part of AtariWrapper
         train_env = make_vec_env(flags_dictionary["env"], n_envs=n_envs, seed=int(flags_dictionary["seed"]),  wrapper_class=AtariWrapper, wrapper_kwargs=train_wrapper_params, vec_env_cls=SubprocVecEnv, vec_env_kwargs={"start_method" :"fork"})
@@ -230,6 +236,9 @@ def main():
         eval_env = make_vec_env(flags_dictionary["env"], n_envs=n_eval_envs, seed=eval_env_seed, wrapper_class=AtariWrapper, wrapper_kwargs=eval_wrapper_params, vec_env_cls=SubprocVecEnv, vec_env_kwargs={"start_method" :"fork"})
         eval_env = VecTransposeImage(eval_env) #required for PyTorch convolution layers.
     else:
+
+        print("RGB space not used")
+
         # check if compatible gym env
         monitor = make_env()()
         check_env(monitor.env)

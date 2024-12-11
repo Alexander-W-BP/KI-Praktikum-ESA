@@ -6,6 +6,7 @@ from sklearn.tree import DecisionTreeClassifier
 
 # Pfad zur .viper-Datei
 tree_path = "resources/viper_extracts/extract_output/Pong_seed0_reward-env_oc-extraction/Tree-16.1_best.viper"
+#tree_path = "resources/viper_extracts/extract_output/Pong_seed0_reward-env_oc-n9-extraction/Tree-21.0_best.viper"
 
 # Entscheidungsbaum laden
 tree: DecisionTreeClassifier = load(tree_path)
@@ -46,3 +47,4 @@ plt.figure(figsize=(20, 10))
 sns.heatmap(importance_matrix, annot=True, cmap='viridis', xticklabels=feature_names, yticklabels=['Importance'])
 plt.title('Feature Importances Heatmap')
 plt.show()
+plt.savefig('feature_importances_heatmap_Agent_n9.png')

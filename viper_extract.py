@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import torch
 import argparse
 import numpy as np
 from joblib import load
@@ -74,6 +75,8 @@ def eval_agent(model, env, episodes, obs_save_file=None, acts_save_file=None):
 
 
 def main():
+    print("reached")
+    print(torch.cuda.is_available())
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--input", type=str, required=True, help="checkpoint folder name containing 'best_model.zip' and 'best_vecnormalize.pkl'")
     parser.add_argument("-r", "--rule_extraction", type=str, required=True, choices=["viper"], default="viper", help="rule extraction to use.")

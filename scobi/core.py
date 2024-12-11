@@ -21,15 +21,19 @@ class Environment(Env):
         self.game_object_wrapper = get_wrapper_class()
         # Zugriff auf die Aktionen der Umgebung
         if hasattr(self.oc_env, 'unwrapped') and hasattr(self.oc_env.unwrapped, 'get_action_meanings'):
+            print("Using get_action_meanings")
             actions = self.oc_env.unwrapped.get_action_meanings()
         else:
+            print("Using action_space")
             actions = [str(i) for i in range(self.oc_env.action_space.n)]
 
         self.oc_env.reset(seed=self.seed)
         self.noisy_objects = os.environ["SCOBI_OBJ_EXTRACTOR"] == "Noisy_OC_Atari"
         if hasattr(self.oc_env, 'max_objects'):
+            print("Using max_objects")
             max_objects = self._wrap_map_order_game_objects(self.oc_env.max_objects, env_name, reward)
         else:
+            print("Not using max_objects")
             max_objects = []
         self.did_reset = False
         self.focus = Focus(env_name, reward, hide_properties, focus_dir, focus_file, max_objects, actions, refresh_yaml, self.logger)
@@ -51,6 +55,8 @@ class Environment(Env):
         self.ep_env_reward = None
         self.ep_env_reward_buffer = 0
         self.reset_ep_reward = True
+
+        print("Reward shaping: ", reward)
 
         if reward == 2: # mix rewards
             self._reward_composition_func = lambda a, b : a + b
