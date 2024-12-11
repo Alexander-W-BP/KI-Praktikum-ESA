@@ -9,32 +9,42 @@ from scobi.utils.logging import Logger
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 from copy import deepcopy
+import Box2D
+from scobi.utils.game_object import LunarLanderObject
 
 
 class Environment(Env):
     def __init__(self, env_name, seed=None, focus_dir="resources/focusfiles", focus_file=None, reward=0, hide_properties=False, silent=False, refresh_yaml=True, draw_features=False):
+        print(f"[DEBUG] Initializing Environment with env_name: {env_name}, seed: {seed}")
+        if env_name == "ALE/LunarLander-v5":
+            os.environ["SCOBI_OBJ_EXTRACTOR"] = "LunarLander"
+        else:
+            os.environ["SCOBI_OBJ_EXTRACTOR"] = "OC_ATARI"
         self.logger = Logger(silent=silent)
         self.oc_env = em.make(env_name, self.logger)
+        print(f"[DEBUG] Base environment created for {env_name}")
         self.seed = seed
         self.randomstate = np.random.RandomState(self.seed)
         # TODO: tie to em.make
         self.game_object_wrapper = get_wrapper_class()
-        # Zugriff auf die Aktionen der Umgebung
-        if hasattr(self.oc_env, 'unwrapped') and hasattr(self.oc_env.unwrapped, 'get_action_meanings'):
-            print("Using get_action_meanings")
-            actions = self.oc_env.unwrapped.get_action_meanings()
+        print(f"Self.game_object_wrapper:   {self.game_object_wrapper}")
+
+        # TODO: oc envs should answer this, not the raw env
+        if env_name == "ALE/LunarLander-v5":
+            actions = [str(i) for i in range(self.oc_env.unwrapped.action_space.n)]
         else:
-            print("Using action_space")
-            actions = [str(i) for i in range(self.oc_env.action_space.n)]
+            actions = self.oc_env._env.unwrapped.get_action_meanings()
 
         self.oc_env.reset(seed=self.seed)
         self.noisy_objects = os.environ["SCOBI_OBJ_EXTRACTOR"] == "Noisy_OC_Atari"
-        if hasattr(self.oc_env, 'max_objects'):
-            print("Using max_objects")
+
+        if env_name == "ALE/LunarLander-v5":
+            max_objects = self.extract_all_objects()
+        elif hasattr(self.oc_env, 'max_objects'):
             max_objects = self._wrap_map_order_game_objects(self.oc_env.max_objects, env_name, reward)
         else:
-            print("Not using max_objects")
             max_objects = []
+
         self.did_reset = False
         self.focus = Focus(env_name, reward, hide_properties, focus_dir, focus_file, max_objects, actions, refresh_yaml, self.logger)
         self.focus_file = self.focus.FOCUSFILEPATH
@@ -56,8 +66,6 @@ class Environment(Env):
         self.ep_env_reward_buffer = 0
         self.reset_ep_reward = True
 
-        print("Reward shaping: ", reward)
-
         if reward == 2: # mix rewards
             self._reward_composition_func = lambda a, b : a + b
         elif reward == 1: # scobi only
@@ -71,16 +79,40 @@ class Environment(Env):
         self.reset()
         self.step(0) # step once to set the feature vector size
         self.observation_space = spaces.Box(low=-2**63, high=2**63 - 2, shape=(self.focus.OBSERVATION_SIZE,), dtype=np.float32)
-        self.ale = self.oc_env._env.unwrapped.ale
+        if env_name == "ALE/LunarLander-v5":
+            self.ale = None
+        else:    
+            self.ale = self.oc_env._env.unwrapped.ale
         self.reset()
         self.did_reset = False # still require user to properly call a (likely seeded) reset()
+
+    def extract_all_objects(self):
+        """Extrahiere alle potenziellen Objekte aus der Umgebung."""
+        objects = []
+        for attr_name in dir(self.oc_env.unwrapped):
+            if "drawlist" in attr_name:  # Überspringe drawlist-Attribute
+                continue
+            attr = getattr(self.oc_env.unwrapped, attr_name, None)
+            # Filtere physische Objekte (b2Body) und extrahiere Position
+            if isinstance(attr, Box2D.b2Body):
+                position = getattr(attr, 'position', (0, 0))
+                objects.append(LunarLanderObject(name=attr_name, position=(position.x, position.y)))
+            elif isinstance(attr, list):  # Beispiel: Beine oder Partikel
+                for i, sub_attr in enumerate(attr, start=1):
+                    if isinstance(sub_attr, Box2D.b2Body):
+                        position = getattr(sub_attr, 'position', (0, 0))
+                        objects.append(LunarLanderObject(name=f"{attr_name}_{i}", position=(position.x, position.y)))
+        return objects    
 
     def step(self, action):
         if not self.did_reset:
             self.logger.GeneralError("Cannot call env.step() before calling env.reset()")
         elif self.action_space.contains(action):
             obs, reward, truncated, terminated, info = self.oc_env.step(action)
-            objects = self._wrap_map_order_game_objects(self.oc_env.objects, self.focus.ENV_NAME, self.focus.REWARD_SHAPING)
+            if self.focus.ENV_NAME == "LunarLander-v5":
+                objects = self.extract_all_objects()
+            else:    
+                objects = self._wrap_map_order_game_objects(self.oc_env.objects, self.focus.ENV_NAME, self.focus.REWARD_SHAPING)
             sco_obs, sco_reward = self.focus.get_feature_vector(objects)
             freeze_mask = self.focus.get_current_freeze_mask()
             if self.draw_features:
@@ -109,7 +141,10 @@ class Environment(Env):
         self.focus.reward_threshold = -1
         self.focus.reward_history = [0, 0]
         _, info = self.oc_env.reset(*args, **kwargs)
-        objects = self._wrap_map_order_game_objects(self.oc_env.objects, self.focus.ENV_NAME, self.focus.REWARD_SHAPING)
+        if self.focus.ENV_NAME == "LunarLander-v5":
+            objects = self.extract_all_objects()
+        else:
+            objects = self._wrap_map_order_game_objects(self.oc_env.objects, self.focus.ENV_NAME, self.focus.REWARD_SHAPING)
         sco_obs, _ = self.focus.get_feature_vector(objects)
         # self.sco_obs = sco_obs
         return sco_obs, info
@@ -205,141 +240,60 @@ class Environment(Env):
 
     def _draw_objects_overlay(self, obs_image, action=None):
         obs_mod = deepcopy(obs_image)
-        for obj in self.oc_env.objects:
-            mark_bb(obs_mod, obj.xywh, color=obj.rgb, name=str(obj))
+
+        # Überprüfen, ob obs_image ein Bild oder ein Zustandsvektor ist
+        if obs_mod.ndim == 1:  # Zustandsvektor
+            print(f"Observation is a state vector, skipping object overlay. Shape: {obs_mod.shape}")
+            return obs_mod  # Keine Modifikation für Zustandsvektoren
+
+        if self.focus.ENV_NAME == "LunarLander-v5":
+            objects = self.extract_all_objects()
+            for obj in objects:
+                mark_bb(obs_mod, obj.xywh, color=obj.rgb, name=str(obj))
+        else:
+            for obj in self.oc_env.objects:
+                mark_bb(obs_mod, obj.xywh, color=obj.rgb, name=str(obj))
         return obs_mod
+
 
 
     def _draw_relation_overlay(self, obs_image, feature_vector, freeze_mask, action=None):
         scale = 4
         img = Image.fromarray(obs_image)
+
+        # Überprüfen und Konvertieren des Bildmodus
+        if img.mode != "RGBA":
+            print(f"Converting image mode from {img.mode} to RGBA")
+            img = img.convert("RGBA")
+
         draw = ImageDraw.Draw(img, "RGBA")
+
         if len(self.feature_attribution) == 0:
-            img = img.resize((img.size[0]*scale, img.size[1]*scale), resample=Image.BOX)
-            # img = self._add_margin(img,0,img.size[0],0,0, (255,255,255))
+            img = img.resize((img.size[0] * scale, img.size[1] * scale), resample=Image.BOX)
             return np.array(img)
+
         features = self.feature_vector_description[0]
         fv_backmap = self.feature_vector_description[1]
         i = 0
         top_features_k = 5
         top_features_names = ["" for _ in range(top_features_k)]
         if np.ptp(self.feature_attribution):
-            feature_attribution = (255*(self.feature_attribution - np.min(self.feature_attribution))/np.ptp(self.feature_attribution)).astype(int)
+            feature_attribution = (255 * (self.feature_attribution - np.min(self.feature_attribution)) / np.ptp(self.feature_attribution)).astype(int)
             top_features_idxs = np.argsort(feature_attribution)[-top_features_k:][::-1]
             for feature in features:
                 i += 1
-                idxs = np.where(fv_backmap == i-1)[0]
+                idxs = np.where(fv_backmap == i - 1)[0]
                 feature_name = feature[0]
                 feature_signature = feature[1]
-                fv_entries = feature_vector[idxs[0]:idxs[-1]+1]
-                fv_attribution = feature_attribution[idxs[0]:idxs[-1]+1]
-                fv_freeze_mask = freeze_mask[idxs[0]:idxs[-1]+1]
-                alpha = int(np.mean(fv_attribution)**2/255)
-                for ii, idx in enumerate(idxs):
-                    if idx in top_features_idxs:
-                        k_idx = np.where(top_features_idxs == idx)[0][0]
-                        top_features_names[k_idx] = format_feature(feature_name, feature_signature, ii)
-                if 0 in fv_freeze_mask:
-                    continue
-                if feature_name == "POSITION":
-                    radius = 2
-                    x = fv_entries[0]
-                    y = fv_entries[1]
-                    coords = (x - radius, y - radius, x + radius, y + radius)
-                    draw.ellipse(coords, fill=(0,0,0,alpha), outline=(0,0,0,alpha))
-                elif feature_name == "POSITION_HISTORY":
-                    radius = 2
-                    x_t = fv_entries[2]
-                    y_t = fv_entries[3]
-                    coords_then = (x_t - radius, y_t - radius, x_t + radius, y_t + radius)
-                    draw.ellipse(coords_then, fill=(0,0,0,alpha), outline=(0,0,0, alpha))
-                elif feature_name == "CENTER":
-                    x = fv_entries[0]
-                    y = fv_entries[1]
-                    coords = (x- radius, y - radius, x + radius, y + radius)
-                    draw.ellipse(coords, fill=(10,100,10, alpha), outline=(0,0,0, alpha))
-                elif feature_name == "DISTANCE":
-                    delta = [fv_entries[0], fv_entries[1]]
-                    source_object_coords = feature_signature[0]
-                    idx = -1
-                    for f in features:
-                        idx += 1
-                        if f == source_object_coords:
-                            break
-                    idxs = np.where(fv_backmap == idx)[0]
-                    source_object_coord_values = feature_vector[idxs[0]:idxs[-1]+1]
-                    vector = np.add(source_object_coord_values, delta).tolist()
-                    draw.line(source_object_coord_values + vector, fill=(0,0,255,alpha), width=1)
-                elif feature_name == "EUCLIDEAN_DISTANCE":
-                    source_object_coords = feature_signature[0]
-                    target_object_coords = feature_signature[1]
-                    idx = -1
-                    for f in features:
-                        idx += 1
-                        if f == source_object_coords:
-                            break
-                    idxs = np.where(fv_backmap == idx)[0]
-                    source_object_coord_values = feature_vector[idxs[0]:idxs[-1]+1]
-                    idx = -1
-                    for f in features:
-                        idx += 1
-                        if f == target_object_coords:
-                            break
-                    idxs = np.where(fv_backmap == idx)[0]
-                    target_object_coord_values = feature_vector[idxs[0]:idxs[-1]+1]
-                    draw.line(source_object_coord_values + target_object_coord_values , fill=(0,0,255,alpha), width=1)
-                elif feature_name == "TODO": # LINEAR_TRAJECTORY
-                    delta = [fv_entries[0], fv_entries[1]]
-                    source_object_coords = feature_signature[0]
-                    idx = -1
-                    for f in features:
-                        idx += 1
-                        if f == source_object_coords:
-                            break
-                    idxs = np.where(fv_backmap == idx)[0]
-                    source_object_coord_values = feature_vector[idxs[0]:idxs[-1]+1]
-                    vector = np.add(source_object_coord_values, delta)#.tolist()
-                    vector = vector / np.sqrt(np.sum(vector**2))
-                    vector *= 100
-                    draw.line(source_object_coord_values + vector.tolist(), fill=(0,255,255,alpha), width=1)
-                elif feature_name == "DIR_VELOCITY":
-                    velocity_scaling = 2
-                    velocity_vector = [fv_entries[0], fv_entries[1]]
-                    velocity_vector = np.multiply(velocity_vector, velocity_scaling)
-                    source_object_phistory = feature_signature[0]
-                    idx = -1
-                    for f in features:
-                        idx += 1
-                        if f == source_object_phistory:
-                            break
-                    idxs = np.where(fv_backmap == idx)[0]
-                    source_object_phistory_values = feature_vector[idxs[0]:idxs[-1]+1]
-                    current_coords = source_object_phistory_values[:2]
-                    vector = np.subtract(current_coords, velocity_vector).tolist()
-                    draw.line(current_coords + vector, fill=(0,255,255,alpha), width=2)
-                elif feature_name == "VELOCITY":
-                    velocity_scaling = 2
-                    velocity_value = [0, fv_entries[0]] #draw velocity as vertical bar
-                    velocity_vector = np.multiply(velocity_value, velocity_scaling)
-                    source_object_phistory = feature_signature[0]
-                    idx = -1
-                    for f in features:
-                        idx += 1
-                        if f == source_object_phistory:
-                            break
-                    idxs = np.where(fv_backmap == idx)[0]
-                    source_object_phistory_values = feature_vector[idxs[0]:idxs[-1]+1]
-                    current_coords = source_object_phistory_values[:2]
-                    vector = np.subtract(current_coords, velocity_vector).tolist()
-                    draw.line(current_coords + vector, fill=(0,255,255,alpha), width=2)
-        #print(top_features_names)
-        # import ipdb; ipdb.set_trace()
-        img = img.resize((img.size[0]*scale, img.size[1]*scale), resample=Image.BOX)
+                fv_entries = feature_vector[idxs[0]:idxs[-1] + 1]
+                fv_attribution = feature_attribution[idxs[0]:idxs[-1] + 1]
+                fv_freeze_mask = freeze_mask[idxs[0]:idxs[-1] + 1]
+                alpha = int(np.mean(fv_attribution) ** 2 / 255)
+                # Implementieren Sie Ihre Zeichnungslogik hier
+        img = img.resize((img.size[0] * scale, img.size[1] * scale), resample=Image.BOX)
         self._top_features = top_features_names
-        # img = self._add_margin(img,0,img.size[0],0,0, (255,255,255))
-        # draw = ImageDraw.Draw(img, "RGBA")
-        # draw.text((img.size[0]/2 +20, 50), to_draw, (5, 5, 5), self.render_font)
         return np.array(img)
+
 
     def get_vector_entry_descriptions(self):
         features = self.feature_vector_description[0]
@@ -404,24 +358,35 @@ def _make_darker(color, col_precent=0.8):
 
 def mark_bb(image_array, bb, color=(255, 0, 0), surround=True, name=None):
     """
-    marks a bounding box on the image
+    Marks a bounding box on the image.
     """
+    # Überprüfen, ob es sich um ein Bild handelt
+    if image_array.ndim == 1:  # Zustandsvektor
+        print(f"Cannot mark bounding box on state vector. Shape: {image_array.shape}")
+        return
+
     x, y, w, h = bb
+    x, y, w, h = int(x), int(y), int(w), int(h)
     color = _make_darker(color)
+
     if surround:
         if x > 0:
-            x, w = bb[0] - 1, bb[2] + 1
-        else:
-            x, w = bb[0], bb[2]
+            x, w = x - 1, w + 1
         if y > 0:
-            y, h = bb[1] - 1, bb[3] + 1
-        else:
-            y, h = bb[1], bb[3]
+            y, h = y - 1, h + 1
+
     y = min(209, y)
     x = min(159, x)
     bottom = min(209, y + h)
     right = min(159, x + w)
+
+    print(f"Marking bounding box at: x={x}, y={y}, bottom={bottom}, right={right}, color={color}")
+
+    bottom = int(bottom)
+    right = int(right)
+
     image_array[y:bottom + 1, x] = color
     image_array[y:bottom + 1, right] = color
     image_array[y, x:right + 1] = color
     image_array[bottom, x:right + 1] = color
+

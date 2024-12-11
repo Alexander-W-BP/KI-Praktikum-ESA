@@ -1,250 +1,87 @@
-import pickle
-import numpy as np
-import pygame
-import gymnasium as gym
-import time
 import os
-from scobi import Environment
-try:
-    from pygame_screen_record import ScreenRecorder
-    _screen_recorder_imported = True
-except ImportError as imp_err:
-    _screen_recorder_imported = False
-
+import subprocess
 
 class Renderer:
-    window: pygame.Surface
-    clock: pygame.time.Clock
-    env: gym.Env
-    zoom: int = 4
-    fps: int = 20
-
-    def __init__(self, envs, model, record=False, nb_frames=0):
+    def __init__(self, envs, model, output_file="output.txt", record=False, nb_frames=0):
         self.envs = envs
-        if hasattr(envs, 'venv') and hasattr(envs.venv, 'envs'):
-            self.env = envs.venv.envs[0]
-            self.rgb_agent = False
-        elif hasattr(envs, 'envs'):
-            self.env = envs.envs[0]  # Handles cases where envs are in a DummyVecEnv or similar
-            self.rgb_agent = True
-        else:
-            self.env = envs
-            self.rgb_agent = True
+        self.env = envs
         self.model = model
         self.current_frame = self._get_current_frame()
-        self._init_pygame(self.current_frame)
         self.paused = False
-
-        self.current_keys_down = set()
-        self.current_mouse_pos = None
-        if not self.rgb_agent:
-            self.keys2actions = self.env.oc_env.unwrapped.get_keys_to_action()
-
-        self.ram_grid_anchor_left = self.env_render_shape[0] + 28
-        self.ram_grid_anchor_top = 28
-
-        self.active_cell_idx = None
-        self.candidate_cell_ids = []
-        self.current_active_cell_input : str = ""
-
-        self.human_playing = False
-        self.print_reward = False
-        self._recording = False
-
-        if record:
-            if _screen_recorder_imported:
-                self._screen_recorder = ScreenRecorder(60)
-                self._screen_recorder.start_rec()
-                self._recording = True
-                self.nb_frames = nb_frames
-            else:
-                print("Screen recording not available. Please install the pygame_screen_record package.")
-                exit(1)
-        else:
-            self.nb_frames = np.inf
-
-    def _init_pygame(self, sample_image):
-        pygame.init()
-        pygame.display.set_caption("OCAtari Environment")
-        sample_image = np.repeat(np.repeat(np.swapaxes(sample_image, 0, 1), self.zoom, axis=0), self.zoom, axis=1)
-        self.env_render_shape = sample_image.shape[:2]
-        window_size = self.env_render_shape[:2]
-        self.window = pygame.display.set_mode(window_size)
-        self.clock = pygame.time.Clock()      
-
-    """ def run(self):
         self.running = True
-        obs = self.envs.reset()
-        i = 1
-        while self.running:
-            self._handle_user_input()
-            if not self.paused:
-                if self.human_playing:
-                    action = [self._get_action()]
-                    time.sleep(0.05)
-                else:
-                    action, _ = self.model.predict(obs, deterministic=True)
-                obs, rew, done, infos = self.envs.step(action)
-                self.env.sco_obs = obs
-                self.current_frame = self._get_current_frame()
-                if self.print_reward and rew[0]:
-                    print(rew[0])
-                if done:
-                    if self._recording and self.nb_frames == 0:
-                        self._save_recording()
-                    obs = self.envs.reset()
-                elif self._recording and i == self.nb_frames:
-                    self._save_recording()
-            self._render()
+        self.record = record
+        self.nb_frames = nb_frames
+        self.output_file = output_file  # Datei, in die geschrieben wird
 
-            if self.rgb_agent:
-                self.clock.tick(self.fps)
-        pygame.quit() """
+        # Initialisieren und Datei leeren
+        with open(self.output_file, "w") as file:
+            file.write("Frame\tX\tY\tVelX\tVelY\tAngle\tAngularVel\tLeg1\tLeg2\n")  # Header hinzufügen
+
     def run(self):
-        self.running = True
-        obs = self.envs.reset()  # Umgebung wird zurÃ¼ckgesetzt
-        i = 1
-        env = Environment(env_name="ALE/Pong-v5")
-        
-
+        obs = self.envs.reset()
+        frame_counter = 0
         while self.running:
-            import ipdb; ipdb.set_trace()
-            self._handle_user_input()
-            if not self.paused:
-                if self.human_playing:
-                    action = [self._get_action()]
-                    time.sleep(0.05)
-                else:
-                    # Aufruf der neuen Funktion vor der Aktion
-                    print("Vector Entry Descriptions:")
-                    vector_descriptions = env.get_vector_entry_descriptions()
-                    #print(vector_descriptions)
-                    for a, b in zip(vector_descriptions, obs[0]):
-                        print(a, b)
+            # Modellvorhersage und Umgebungsinteraktion
+            action, _ = self.model.predict(obs, deterministic=True)
+            obs, _, done, _ = self.envs.step(action)
+            self.current_frame = self._get_current_frame()
 
-                    # Modell sagt Aktion vorher
-                    action, _ = self.model.predict(obs, deterministic=True)
+            # Ausgabe in Datei schreiben
+            self._write_to_file(frame_counter)
 
-                    print("------------>>>> Action ------------>>>>: ", action)  # Ausgabe der Aktion auf der Kommandozeile
+            # Prüfen, ob beide Beine auf dem Boden sind
+            if self._check_landing_condition(self.current_frame):
+                print("Both legs have landed. Stopping rendering.")
+                self.running = False  # Rendering beenden
 
-                    # Entscheidung umsetzen
-                    obs, rew, done, infos = self.envs.step(action)
-                    self.env.sco_obs = obs
-                    self.current_frame = self._get_current_frame()
+            if done:
+                obs = self.envs.reset()
 
-                    if self.print_reward and rew[0]:
-                        print(rew[0])
+            frame_counter += 1
 
-                    if done:
-                        if self._recording and self.nb_frames == 0:
-                            self._save_recording()
-                        obs = self.envs.reset()
-                    elif self._recording and i == self.nb_frames:
-                        self._save_recording()
-
-                self._render()
-
-                if self.rgb_agent:
-                    self.clock.tick(self.fps)
-        pygame.quit()
-
-
-
-
-
-    def _get_action(self):
-        pressed_keys = list(self.current_keys_down)
-        pressed_keys.sort()
-        pressed_keys = tuple(pressed_keys)
-        if pressed_keys in self.keys2actions.keys():
-            return self.keys2actions[pressed_keys]
-        else:
-            return 0  # NOOP
-
-    def _save_recording(self):
-        self._screen_recorder.stop_rec()	# stop recording
-        filename = f"{self.env.oc_env.game_name}.avi"
-        i = 0
-        while os.path.exists(filename):
-            i += 1
-            filename = f"{self.env.oc_env.game_name}_{i}.avi"
-        self._screen_recorder.save_recording(filename)
-        print(f"Recording saved as {filename}")
-        self._recording = False
-
-    def _handle_user_input(self):
-        self.current_mouse_pos = np.asarray(pygame.mouse.get_pos())
-
-        events = pygame.event.get()
-        for event in events:
-            if event.type == pygame.QUIT:  # window close button clicked
-                if self._recording:
-                    self._save_recording()
-                self.running = False
-
-            elif event.type == pygame.KEYDOWN:  # keyboard key pressed
-                if event.key == pygame.K_p:  # 'P': pause/resume
-                    self.paused = not self.paused
-
-                elif event.key == pygame.K_r:  # 'R': reset
-                    self.env.reset()
-                
-                elif event.key == pygame.K_h:  # 'H': toggle human playing
-                    self.human_playing = not self.human_playing
-                    if self.human_playing:
-                        print("Human playing")
-                    else:
-                        print("AI playing")
-                
-                elif event.key == pygame.K_m:  # 'M': save snapshot
-                    snapshot = self.env._ale.cloneState()
-                    pickle.dump(snapshot, open("snapshot.pkl", "wb"))
-                    print("Saved snapshot.pkl")
-
-                elif event.key == pygame.K_ESCAPE and self.active_cell_idx is not None:
-                    self._unselect_active_cell()
-
-                elif (event.key,) in self.keys2actions.keys():  # env action
-                    self.current_keys_down.add(event.key)
-
-                elif pygame.K_0 <= event.key <= pygame.K_9:  # enter digit
-                    char = str(event.key - pygame.K_0)
-                    if self.active_cell_idx is not None:
-                        self.current_active_cell_input += char
-
-                elif event.key == pygame.K_BACKSPACE:  # remove character
-                    if self.active_cell_idx is not None:
-                        self.current_active_cell_input = self.current_active_cell_input[:-1]
-
-                elif event.key == pygame.K_RETURN:
-                    if self.active_cell_idx is not None:
-                        if len(self.current_active_cell_input) > 0:
-                            new_cell_value = int(self.current_active_cell_input)
-                            if new_cell_value < 256:
-                                self._set_ram_value_at(self.active_cell_idx, new_cell_value)
-                        self._unselect_active_cell()
-
-            elif event.type == pygame.KEYUP:  # keyboard key released
-                if (event.key,) in self.keys2actions.keys():
-                    self.current_keys_down.remove(event.key)
+        # Animations-Skript ausführen
+        self._run_animation_script()
 
     def _get_current_frame(self):
-        if self.rgb_agent:
-            return self.env.render()
+        # Greifen Sie auf die erste Umgebung innerhalb von DummyVecEnv zu
+        actual_env = self.env.envs[0] if hasattr(self.env, 'envs') else self.env
+        if hasattr(actual_env, '_obj_obs'):
+            return actual_env._obj_obs
         else:
-            return self.env._obj_obs
+            raise AttributeError("The actual environment does not have the attribute '_obj_obs'")
 
-    def _render(self, frame = None):
-        self.window.fill((0,0,0))  # clear the entire window
-        self._render_atari(frame)
-        pygame.display.flip()
-        pygame.event.pump()
+    def _write_to_file(self, frame_counter):
+        """
+        Schreibt den aktuellen Frame in die Ausgabedatei.
+        """
+        with open(self.output_file, "a") as file:
+            formatted_frame = "\t".join(f"{value:.5f}" for value in self.current_frame[:6]) + \
+                              f"\t{int(self.current_frame[6])}\t{int(self.current_frame[7])}"
+            file.write(f"{frame_counter}\t{formatted_frame}\n")
 
-    def _render_atari(self, frame = None):
-        if frame is None:
-            frame = self.current_frame
-        frame = np.swapaxes(np.repeat(np.repeat(frame, self.zoom, axis=0), self.zoom, axis=1), 0, 1)
-        frame_surface = pygame.Surface(self.env_render_shape)
-        pygame.pixelcopy.array_to_surface(frame_surface, frame)
-        self.window.blit(frame_surface, (0, 0))
-        self.clock.tick(60)
+    def _check_landing_condition(self, frame):
+        """
+        Überprüfen, ob beide Beine den Boden berühren.
+        Die letzten beiden Werte des Arrays sind Booleans für die Beine.
+        """
+        if len(frame) >= 8:  # Sicherstellen, dass das Array korrekt ist
+            return frame[-1] and frame[-2]  # Beide Beine auf dem Boden
+        return False
+
+    def _run_animation_script(self):
+        """
+        Führt das Animationsskript aus, nachdem die Simulation abgeschlossen ist.
+        """
+        animation_script_path = r"C:\Studium_TU_Darmstadt\Master\1. Semester\KI Praktikum\WorkingEnv\KI-Praktikum-ESA\lunar_lander_animation.py"
+        
+        if not os.path.isfile(animation_script_path):
+            print(f"Animation script not found at: {animation_script_path}")
+            return
+        
+        try:
+            print("Starting animation script...")
+            subprocess.run(["python", animation_script_path], check=True)
+            print("Animation script completed.")
+        except subprocess.CalledProcessError as e:
+            print(f"Error while running animation script: {e}")
+

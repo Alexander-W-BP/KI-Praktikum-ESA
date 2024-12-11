@@ -84,6 +84,7 @@ def linear_schedule(initial_value: float) -> Callable[[float], float]:
         return progress_remaining * initial_value
     return func
 
+# Create a yaml file which contains information about the checkpoint
 def _create_yaml(flags, location):
     data = {
         'game': flags['game'],
@@ -126,7 +127,7 @@ def _create_yaml(flags, location):
 
     print(f"YAML file with training values created at {location}")
 
-
+# Add information to the yaml file containing information about the checkpoint
 def _update_yaml(location, steps, finished):
     with open(location, 'r') as yaml_file:
         data = yaml.safe_load(yaml_file)
@@ -137,6 +138,7 @@ def _update_yaml(location, steps, finished):
 
     print(f"YAML file updated with training duration at {location}")
 
+# Helper function to get the correct checkpoint location with the correct version specified
 def _get_directory(path, exp_name):
     version_counter = 2
     if not (path / f"{exp_name}").exists():
@@ -149,27 +151,24 @@ def _get_directory(path, exp_name):
 
 def main():
     flags_dictionary = utils.parser.parser.parse_train()
-
     exp_name = flags_dictionary["exp_name"]
     n_envs = int(flags_dictionary["environments"])
     n_eval_envs = 4
     n_eval_episodes = 8
     eval_env_seed = (int(flags_dictionary["seed"]) + 42) * 2 #different seeds for eval
-    training_timestamps = 20_000
-    checkpoint_frequency = 1_000
-    eval_frequency = 500
-    rtpt_frequency = 100
+    training_timestamps = 20_000  # 20_000_000
+    checkpoint_frequency = 1000   # 1_000_000
+    eval_frequency = 500     # 500_000
+    rtpt_frequency = 100  # 100_000
 
     log_path = _get_directory(Path("resources/training_logs"), exp_name)
     ckpt_path = _get_directory(Path("resources/checkpoints"), exp_name)
     log_path.mkdir(parents=True, exist_ok=True)
     ckpt_path.mkdir(parents=True, exist_ok=True)
+
     if flags_dictionary["pruned_ff_name"] is None :
-        print("No focus file provided, training on full feature set")
         focus_dir = ckpt_path
-        print("Focus Directory: ", focus_dir)
     else:
-        print(f"Training on focus file {flags_dictionary['pruned_ff_name']}")
         focus_dir = flags_dictionary["focus_dir"]
 
     yaml_path = Path(ckpt_path, f"{exp_name}_training_status.yaml")
@@ -185,9 +184,6 @@ def main():
     }
     _create_yaml(flags, yaml_path)
 
-
-
-
     def make_env(rank: int = 0, seed: int = 0, silent=False, refresh=True) -> Callable:
         def _init() -> gym.Env:
             env = Environment(flags_dictionary["env"],
@@ -196,11 +192,18 @@ def main():
                               focus_file=flags_dictionary["pruned_ff_name"],
                               hide_properties=flags_dictionary["hide_properties"],
                               silent=silent,
-                              reward=flags_dictionary["reward"],
+                              reward=flags_dictionary["reward_mode"],
                               refresh_yaml=refresh)
-            env = EpisodicLifeEnv(env=env)
+            print(f"[DEBUG] Environment created successfully: {env}")
+            if 'ALE/LunarLander-v5' in flags_dictionary["env"]:
+                pass
+            else:
+                env = EpisodicLifeEnv(env=env)
+                print(f"[DEBUG] Applying EpisodicLifeEnv for rank {rank}")
             env = Monitor(env)
+            print(f"[DEBUG] Monitor applied for rank {rank}")
             env.reset(seed=seed + rank)
+            print(f"[DEBUG] Environment reset completed for rank {rank}")
             return env
         set_random_seed(seed)
         return _init
@@ -224,9 +227,6 @@ def main():
 
     # preprocessing based on atari wrapper of the openai baseline implementation (https://github.com/openai/baselines/blob/master/baselines/ppo1/run_atari.py)
     if flags_dictionary["rgb"]:
-
-        print("RGB space used")
-
         # NoopResetEnv not required, because v5 has sticky actions, and also frame_skip=5, so also not required to set in wrapper (1 means no frameskip). no reward clipping, because scobots dont clip as well
         train_wrapper_params = {"noop_max" : 0, "frame_skip" : 1, "screen_size": 84, "terminal_on_life_loss": True, "clip_reward" : False} # remaining values are part of AtariWrapper
         train_env = make_vec_env(flags_dictionary["env"], n_envs=n_envs, seed=int(flags_dictionary["seed"]),  wrapper_class=AtariWrapper, wrapper_kwargs=train_wrapper_params, vec_env_cls=SubprocVecEnv, vec_env_kwargs={"start_method" :"fork"})
@@ -236,9 +236,6 @@ def main():
         eval_env = make_vec_env(flags_dictionary["env"], n_envs=n_eval_envs, seed=eval_env_seed, wrapper_class=AtariWrapper, wrapper_kwargs=eval_wrapper_params, vec_env_cls=SubprocVecEnv, vec_env_kwargs={"start_method" :"fork"})
         eval_env = VecTransposeImage(eval_env) #required for PyTorch convolution layers.
     else:
-
-        print("RGB space not used")
-
         # check if compatible gym env
         monitor = make_env()()
         check_env(monitor.env)
@@ -246,7 +243,7 @@ def main():
         # silent init and dont refresh default yaml file because it causes spam and issues with multiprocessing
         eval_env = VecNormalize(SubprocVecEnv([make_eval_env(rank=i, seed=eval_env_seed, silent=True, refresh=False) for i in range(n_eval_envs)], start_method=MULTIPROCESSING_START_METHOD), norm_reward=False, training=False)
         train_env = VecNormalize(SubprocVecEnv([make_env(rank=i, seed=int(flags_dictionary["seed"]), silent=True, refresh=False) for i in range(n_envs)], start_method=MULTIPROCESSING_START_METHOD), norm_reward=False)
-
+        print("[DEBUG] Training environment created successfully")
     rtpt_iters = training_timestamps // rtpt_frequency
     save_bm = SaveBestModelCallback(ckpt_path, rgb=flags_dictionary["rgb_exp"])
     eval_callback = EvalCallback(

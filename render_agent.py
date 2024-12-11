@@ -40,16 +40,17 @@ def main():
     record = flag_dictionary["record"]
     nb_frames = flag_dictionary["nb_frames"]
     print_reward = flag_dictionary["print_reward"]
-    
+    output_file = "output.txt"  # Dateiname für die Ausgabe
+
     if version == 0:
         version = get_highest_version(exp_name)
 
     exp_name += version
 
-    checkpoint_str = "best_model" # "model_5000000_steps" #"best_model"
+    checkpoint_str = "best_model"  # "model_5000000_steps" #"best_model"
     vecnorm_str = "best_vecnormalize.pkl"
     model_path = Path("resources/checkpoints", exp_name, checkpoint_str)
-    vecnorm_path = Path("resources/checkpoints",  exp_name, vecnorm_str)
+    vecnorm_path = Path("resources/checkpoints", exp_name, vecnorm_str)
     ff_file_path = Path("resources/checkpoints", exp_name)
     EVAL_ENV_SEED = 84
 
@@ -60,14 +61,15 @@ def main():
                           focus_dir=ff_file_path,
                           focus_file=pruned_ff_name,
                           hide_properties=hide_properties,
-                          draw_features=True, # implement feature attribution
-                          reward=0) #env reward only for evaluation
+                          draw_features=True,  # implement feature attribution
+                          reward=0)  # env reward only for evaluation
 
         _, _ = env.reset(seed=EVAL_ENV_SEED)
-        dummy_vecenv = DummyVecEnv([lambda :  env])
+        dummy_vecenv = DummyVecEnv([lambda: env])
         env = VecNormalize.load(vecnorm_path, dummy_vecenv)
         env.training = False
         env.norm_reward = False
+
     if viper:
         print("loading viper tree of " + exp_name)
         if isinstance(viper, str):
@@ -76,10 +78,14 @@ def main():
             model = _load_viper(exp_name, False)
     else:
         model = PPO.load(model_path)
+
     obs = env.reset()
-    renderer = Renderer(env, model, record, nb_frames)
+
+    # Renderer mit Ausgabe-Datei initialisieren
+    renderer = Renderer(env, model, output_file=output_file, record=record, nb_frames=nb_frames)
     renderer.print_reward = print_reward
     renderer.run()
+
 
 if __name__ == '__main__':
     main()
