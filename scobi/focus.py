@@ -122,6 +122,7 @@ class Focus():
             ["ORIENTATION", "legs_1"],
             ["ORIENTATION", "legs_2"],
             ["ORIENTATION", "moon"],
+            ["VELOCITY", "lander"],
             ["RGB", "lander"],
             ["RGB", "legs_1"],
             ["RGB", "legs_2"],
@@ -292,9 +293,10 @@ class Focus():
     def validate_properties_signatures(self, propslist):
         for p in propslist:
             if p[1] not in self.OBJECT_NAMES:
-                self.l.FocusFileParserError("Unknown object in properties selection: %s" % p[1])
+                self.l.FocusFileParserError("1 Unknown object in properties selection: %s" % p[1])
+            
             if p[0] not in PROPERTIES.keys():
-                self.l.FocusFileParserError("Unknown object in properties selection: %s" % p[0])
+                self.l.FocusFileParserError("2 Unknown object in properties selection: %s" % p[0])
             prop_definition = PROPERTIES[p[0]]
             o = self.get_object_by_name(p[1], self.OBJECTS)
             prop_sig = prop_definition["expects"][0][0].annotation
@@ -608,7 +610,17 @@ class Focus():
                 if feature_name == "ORIENTATION" and feature_signature == "lander":
                     orientation_idxs = np.where(fv_backmap == i - 1)[0]
 
-            if not (position_idxs.any() and velocity_idxs.any() and orientation_idxs.any()):
+            if not position_idxs.any():
+                print("Position not found")
+
+            if not velocity_idxs.any():
+                print("Velocity not found")
+
+            if not orientation_idxs.any():
+                print("Orientation not found")
+
+            if not (position_idxs.any()  and orientation_idxs.any()):
+                print("LunarLander reward function: None")
                 return None
 
             # Reward Function for LunarLander
@@ -617,22 +629,22 @@ class Focus():
                 vel_entries = fv[vel_idxs[0]:vel_idxs[-1] + 1]
                 ori_entries = fv[ori_idxs[0]:ori_idxs[-1] + 1]
 
+                # Prüfe, ob vel_entries einen Wert enthält
+                if len(vel_entries) < 1:
+                    raise ValueError("Velocity entries fehlen oder sind leer")
+
                 # Reward for proximity to landing zone (e.g., x = 0, y close to 0)
                 position_reward = -np.linalg.norm([pos_entries[0], pos_entries[1]])
 
                 # Reward for low velocity (sanftere Landung)
-                velocity_reward = -np.linalg.norm([vel_entries[0], vel_entries[1]])
+                velocity_reward = -vel_entries[0]  # Da VELOCITY nur einen Wert zurückgibt
 
                 # Reward for upright orientation (neigung minimieren)
-                orientation_reward = -abs(ori_entries[0])
-
-                # Optional: Reward for low fuel usage
-                # (Hier wird eine Placeholder-Variable verwendet, falls der Treibstoffverbrauch in den Features verfügbar ist)
-                fuel_usage_reward = 0  # Placeholder; hinzufügen, falls Treibstoffverbrauch zugänglich
+                orientation_reward = -abs(ori_entries[0][0])  # Falls ORIENTATION ein tuple ist
 
                 # Gesamtbelohnung als gewichtete Summe
                 total_reward = (
-                    10 * position_reward + 5 * velocity_reward + 2 * orientation_reward + 1 * fuel_usage_reward
+                    10 * position_reward + 5 * velocity_reward + 2 * orientation_reward
                 )
                 return total_reward
             return reward

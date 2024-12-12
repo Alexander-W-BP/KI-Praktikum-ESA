@@ -161,6 +161,8 @@ def main():
     eval_frequency = 500     # 500_000
     rtpt_frequency = 100  # 100_000
 
+    print("Reward mode: ", flags_dictionary["reward_mode"])
+
     log_path = _get_directory(Path("resources/training_logs"), exp_name)
     ckpt_path = _get_directory(Path("resources/checkpoints"), exp_name)
     log_path.mkdir(parents=True, exist_ok=True)

@@ -105,15 +105,21 @@ class Environment(Env):
         return objects    
 
     def step(self, action):
+        """ print(f"[DEBUG] Step with action: {action}") """
         if not self.did_reset:
             self.logger.GeneralError("Cannot call env.step() before calling env.reset()")
         elif self.action_space.contains(action):
             obs, reward, truncated, terminated, info = self.oc_env.step(action)
+            """ print(f"[DEBUG] Obs: {obs}")
+            print(f"[DEBUG] Reward: {reward}") """
             if self.focus.ENV_NAME == "LunarLander-v5":
                 objects = self.extract_all_objects()
             else:    
                 objects = self._wrap_map_order_game_objects(self.oc_env.objects, self.focus.ENV_NAME, self.focus.REWARD_SHAPING)
+            """ print(f"[DEBUG] Objects: {objects}") """
             sco_obs, sco_reward = self.focus.get_feature_vector(objects)
+            """ print(f"[DEBUG] Sco Obs: {sco_obs}")
+            print(f"[DEBUG] Sco Reward: {sco_reward}") """
             freeze_mask = self.focus.get_current_freeze_mask()
             if self.draw_features:
                 self._obj_obs = self._draw_objects_overlay(obs)

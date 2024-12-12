@@ -42,6 +42,20 @@ def get_orientation(obj: GameObject) -> Tuple[int]:
     return orientation,
 
 
+@register(type="P", name="VELOCITY", params=["OBJECT"], desc="get the velocity for given object")
+def get_velocity(obj: GameObject) -> Tuple[float]:
+    if not obj or not hasattr(obj, 'h_coords'):
+        return None,
+    coords = obj.h_coords
+    if len(coords) < 2:
+        return None,  # Es müssen mindestens zwei Koordinaten für die Berechnung vorhanden sein
+    # Berechne die Geschwindigkeit basierend auf den letzten beiden Positionen
+    obj_past = coords[1]
+    obj_current = coords[0]
+    vel = math.sqrt((obj_current[0] - obj_past[0])**2 + (obj_current[1] - obj_past[1])**2)
+    return vel,
+
+
 @register(type="P", name="RGB", params= ["OBJECT"], desc="get the rgb value for given object")
 def get_rgb(obj: GameObject) -> Tuple[int, int, int]:
     if not obj:
