@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import ipdb
 from stable_baselines3 import PPO
 from stable_baselines3.common.atari_wrappers import WarpFrame
 from stable_baselines3.common.env_util import make_vec_env
@@ -80,6 +81,8 @@ def main():
         model = PPO.load(model_path)
 
     obs = env.reset()
+
+    """ ipdb.set_trace() """
 
     # Renderer mit Ausgabe-Datei initialisieren
     renderer = Renderer(env, model, output_file=output_file, record=record, nb_frames=nb_frames)

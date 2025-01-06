@@ -156,10 +156,10 @@ def main():
     n_eval_envs = 4
     n_eval_episodes = 8
     eval_env_seed = (int(flags_dictionary["seed"]) + 42) * 2 #different seeds for eval
-    training_timestamps = 20_000  # 20_000_000
-    checkpoint_frequency = 1000   # 1_000_000
-    eval_frequency = 500     # 500_000
-    rtpt_frequency = 100  # 100_000
+    training_timestamps = 20_000_000  # 20_000_000
+    checkpoint_frequency = 1_000_000   # 1_000_000
+    eval_frequency = 500_000     # 500_000
+    rtpt_frequency = 100_000  # 100_000
 
     print("Reward mode: ", flags_dictionary["reward_mode"])
 

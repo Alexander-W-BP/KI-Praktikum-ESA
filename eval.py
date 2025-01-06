@@ -68,8 +68,10 @@ def main():
 
     if version == 0:
         version = utils.parser.parser.get_highest_version(exp_name)
-
-    exp_name += str(version)
+        exp_name += str(version)
+    else:
+        exp_name += str("-n") + str(version)
+        
     checkpoint_str = "best_model" # "model_5000000_steps" #"best_model"
     vecnorm_str = "best_vecnormalize.pkl"
     model_path = Path("resources/checkpoints", exp_name, checkpoint_str)
@@ -106,11 +108,11 @@ def main():
     current_rew = 0
     current_step = 0
     obs = env.reset()
-    if variant == "rgb":
+    """ if variant == "rgb":
         img = plt.imshow(env.get_images()[0])
     else:
         scobi_env = env.venv.envs[0]
-        img = plt.imshow(scobi_env._obj_obs)
+        img = plt.imshow(scobi_env._obj_obs) """
 
     if progress_bar:
         with tqdm(total=time, desc="Episodes completed") as pbar:

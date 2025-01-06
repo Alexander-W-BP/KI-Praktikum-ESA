@@ -1,4 +1,5 @@
 """scobi core"""
+import ipdb
 import numpy as np
 import os
 from gymnasium import spaces, Env
@@ -112,6 +113,7 @@ class Environment(Env):
             obs, reward, truncated, terminated, info = self.oc_env.step(action)
             """ print(f"[DEBUG] Obs: {obs}")
             print(f"[DEBUG] Reward: {reward}") """
+            """ ipdb.set_trace() """
             if self.focus.ENV_NAME == "LunarLander-v5":
                 objects = self.extract_all_objects()
             else:    
@@ -135,7 +137,10 @@ class Environment(Env):
                 self.ep_env_reward_buffer = 0
                 self.reset_ep_reward = True
                 self.focus.reward_subgoals = 0
+            #print(f"[DEBUG] Reward: {reward}")
+            #print(f"[DEBUG] Sco Reward: {sco_reward}")
             final_reward = self._reward_composition_func(sco_reward, reward)
+            #print(f"[DEBUG] Final Reward: {final_reward}")
             # self.sco_obs = sco_obs
             return sco_obs, final_reward, truncated, terminated, info # 5
         else:
@@ -249,7 +254,7 @@ class Environment(Env):
 
         # Überprüfen, ob obs_image ein Bild oder ein Zustandsvektor ist
         if obs_mod.ndim == 1:  # Zustandsvektor
-            print(f"Observation is a state vector, skipping object overlay. Shape: {obs_mod.shape}")
+            # print(f"Observation is a state vector, skipping object overlay. Shape: {obs_mod.shape}")
             return obs_mod  # Keine Modifikation für Zustandsvektoren
 
         if self.focus.ENV_NAME == "LunarLander-v5":
@@ -269,7 +274,7 @@ class Environment(Env):
 
         # Überprüfen und Konvertieren des Bildmodus
         if img.mode != "RGBA":
-            print(f"Converting image mode from {img.mode} to RGBA")
+            # print(f"Converting image mode from {img.mode} to RGBA")
             img = img.convert("RGBA")
 
         draw = ImageDraw.Draw(img, "RGBA")

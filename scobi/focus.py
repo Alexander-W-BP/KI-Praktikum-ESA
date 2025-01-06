@@ -517,6 +517,7 @@ class Focus():
                 ]     
             return np.asarray(out, dtype=np.float32), reward
 
+        # print("first pass")
         # unpack property layer
         idx = 0
         for f in self.CURRENT_PROPERTY_COMPUTE_LAYER:
@@ -546,8 +547,10 @@ class Focus():
         self.last_obs_vector = out
         
         if self.REWARD_SHAPING != 0:
+            #print("reward shaping")
             reward = self.REWARD_FUNC(out)
         else:
+            #print("no reward shaping")
             reward = 0
         if self.HIDE_PROPERTIES:
             out = out[self.FEATURE_VECTOR_PROPS_SIZE:]
@@ -597,57 +600,90 @@ class Focus():
             # LunarLander reward function
             print("LunarLander reward function")
             position_idxs = np.empty(0)
-            velocity_idxs = np.empty(0)
+            euclidean_distance_idxs = np.empty(0)
             orientation_idxs = np.empty(0)
+            
             for feature in fv_description:
                 i += 1
                 feature_name = feature[0]
                 feature_signature = feature[1]
+                
                 if feature_name == "POSITION" and feature_signature == "lander":
                     position_idxs = np.where(fv_backmap == i - 1)[0]
-                if feature_name == "VELOCITY" and feature_signature == "lander":
-                    velocity_idxs = np.where(fv_backmap == i - 1)[0]
-                if feature_name == "ORIENTATION" and feature_signature == "lander":
+                elif feature_name == "EUCLIDEAN_DISTANCE":
+                    input1 = feature_signature[0]
+                    input2 = feature_signature[1]
+                    if input1[0] == "POSITION" and input1[1] == "lander" and input2[0] == "POSITION" and input2[1] == "moon":
+                        euclidean_distance_idxs = np.where(fv_backmap == i - 1)[0]
+                elif feature_name == "ORIENTATION" and feature_signature == "lander":
                     orientation_idxs = np.where(fv_backmap == i - 1)[0]
 
+            # Überprüfen, ob alle benötigten Indizes gefunden wurden
             if not position_idxs.any():
                 print("Position not found")
+                return None
 
-            if not velocity_idxs.any():
-                print("Velocity not found")
+            if not euclidean_distance_idxs.any():
+                print("Euclidean Distance to moon not found")
+                return None
 
             if not orientation_idxs.any():
                 print("Orientation not found")
-
-            if not (position_idxs.any()  and orientation_idxs.any()):
-                print("LunarLander reward function: None")
                 return None
 
-            # Reward Function for LunarLander
-            def reward(fv, pos_idxs=position_idxs, vel_idxs=velocity_idxs, ori_idxs=orientation_idxs):
-                pos_entries = fv[pos_idxs[0]:pos_idxs[-1] + 1]
-                vel_entries = fv[vel_idxs[0]:vel_idxs[-1] + 1]
-                ori_entries = fv[ori_idxs[0]:ori_idxs[-1] + 1]
+            # Neue Reward-Funktion für LunarLander: Positive Belohnung für abnehmenden Abstand zum Mond (0,0)
+            # und für eine aufrechte Orientierung des Landers
+            def reward(fv, pos_idxs=position_idxs, euclid_idxs=euclidean_distance_idxs, ori_idxs=orientation_idxs):
+                # Extrahiere Euclidean Distance zum Mond
+                euclid_entries = fv[euclid_idxs[0]:euclid_idxs[-1] + 1]
+                # Extrahiere Orientierung des Landers
+                ori_entries = fv[orientation_idxs[0]:orientation_idxs[-1] + 1]
 
-                # Prüfe, ob vel_entries einen Wert enthält
-                if len(vel_entries) < 1:
-                    raise ValueError("Velocity entries fehlen oder sind leer")
+                # Berechnung des aktuellen Abstands zum Mond (0,0)
+                current_distance = euclid_entries[0]  # Annahme: Es ist der Euclidean Distance-Wert
 
-                # Reward for proximity to landing zone (e.g., x = 0, y close to 0)
-                position_reward = -np.linalg.norm([pos_entries[0], pos_entries[1]])
+                # Initialisierung der Belohnungsschwelle für Abstand
+                if not hasattr(self, 'reward_threshold_distance'):
+                    self.reward_threshold_distance = current_distance
+                    return 0.0  # Keine Belohnung im ersten Schritt
 
-                # Reward for low velocity (sanftere Landung)
-                velocity_reward = -vel_entries[0]  # Da VELOCITY nur einen Wert zurückgibt
+                # Berechnung der Abstandsänderung
+                delta_distance = self.reward_threshold_distance - current_distance
 
-                # Reward for upright orientation (neigung minimieren)
-                orientation_reward = -abs(ori_entries[0][0])  # Falls ORIENTATION ein tuple ist
+                # Belohnung für verringerten Abstand
+                if delta_distance > 0:
+                    reward_distance = delta_distance * 10  # Skalierungsfaktor (anpassbar)
+                    self.reward_threshold_distance = current_distance  # Update des vorherigen Abstands
+                else:
+                    reward_distance = 0.0  # Keine Belohnung, wenn der Abstand sich nicht verringert
 
-                # Gesamtbelohnung als gewichtete Summe
-                total_reward = (
-                    10 * position_reward + 5 * velocity_reward + 2 * orientation_reward
-                )
+                # Berechnung der Orientierungsbelohnung
+                current_orientation = ori_entries[0]  # Annahme: Orientierung in Radiant
+                # Extrahiere den numerischen Wert, falls es ein Tupel ist
+                if isinstance(current_orientation, tuple):
+                    if len(current_orientation) == 1:
+                        current_orientation = current_orientation[0]
+                    else:
+                        raise ValueError(f"Unexpected orientation tuple length: {len(current_orientation)}")
+
+                # Ziel: Orientierung = 0 (aufrecht)
+                max_angle_error = math.pi / 2  # 90 Grad
+                orientation_error = abs(current_orientation)
+                # Belohnung: Je kleiner der Fehler, desto größer die Belohnung
+                reward_orientation = max(0.0, (max_angle_error - orientation_error) / max_angle_error) * 5  # Max 5, min 0
+
+                # Gesamtbelohnung als Summe der beiden Komponenten
+                total_reward = reward_distance + reward_orientation
+
+                # Debug-Ausgabe zur Überprüfung
+                print(f"Current Distance: {current_distance:.2f}, Delta Distance: {delta_distance:.2f}, Reward Distance: {reward_distance:.2f}")
+                print(f"Current Orientation: {current_orientation:.2f}, Orientation Error: {orientation_error:.2f}, Reward Orientation: {reward_orientation:.2f}")
+                print(f"Total Reward: {total_reward:.2f}")
+
                 return total_reward
+
             return reward
+
         elif "Kangaroo" in env:
             # kangaroo reward function
             player_idxs = np.empty(0)
