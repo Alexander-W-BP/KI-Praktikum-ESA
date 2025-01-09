@@ -125,7 +125,7 @@ def _create_yaml(flags, location):
     with open(location, 'w') as yaml_file:
         yaml_file.write(commented_yaml_content)
 
-    print(f"YAML file with training values created at {location}")
+    #print(f"YAML file with training values created at {location}")
 
 # Add information to the yaml file containing information about the checkpoint
 def _update_yaml(location, steps, finished):
@@ -136,7 +136,7 @@ def _update_yaml(location, steps, finished):
     with open(location, 'w') as yaml_file:
         yaml.dump(data, yaml_file)
 
-    print(f"YAML file updated with training duration at {location}")
+    #print(f"YAML file updated with training duration at {location}")
 
 # Helper function to get the correct checkpoint location with the correct version specified
 def _get_directory(path, exp_name):
@@ -153,15 +153,15 @@ def main():
     flags_dictionary = utils.parser.parser.parse_train()
     exp_name = flags_dictionary["exp_name"]
     n_envs = int(flags_dictionary["environments"])
-    n_eval_envs = 4
+    n_eval_envs = 1   # 4
     n_eval_episodes = 8
     eval_env_seed = (int(flags_dictionary["seed"]) + 42) * 2 #different seeds for eval
-    training_timestamps = 20_000_000  # 20_000_000
-    checkpoint_frequency = 1_000_000   # 1_000_000
-    eval_frequency = 500_000     # 500_000
-    rtpt_frequency = 100_000  # 100_000
+    training_timestamps = 20_000  # 20_000_000
+    checkpoint_frequency = 1_000   # 1_000_000
+    eval_frequency = 500     # 500_000
+    rtpt_frequency = 100  # 100_000
 
-    print("Reward mode: ", flags_dictionary["reward_mode"])
+    #print("Reward mode: ", flags_dictionary["reward_mode"])
 
     log_path = _get_directory(Path("resources/training_logs"), exp_name)
     ckpt_path = _get_directory(Path("resources/checkpoints"), exp_name)
@@ -196,16 +196,16 @@ def main():
                               silent=silent,
                               reward=flags_dictionary["reward_mode"],
                               refresh_yaml=refresh)
-            print(f"[DEBUG] Environment created successfully: {env}")
+            #print(f"[DEBUG] Environment created successfully: {env}")
             if 'ALE/LunarLander-v5' in flags_dictionary["env"]:
                 pass
             else:
                 env = EpisodicLifeEnv(env=env)
-                print(f"[DEBUG] Applying EpisodicLifeEnv for rank {rank}")
+                #print(f"[DEBUG] Applying EpisodicLifeEnv for rank {rank}")
             env = Monitor(env)
-            print(f"[DEBUG] Monitor applied for rank {rank}")
+            #print(f"[DEBUG] Monitor applied for rank {rank}")
             env.reset(seed=seed + rank)
-            print(f"[DEBUG] Environment reset completed for rank {rank}")
+            #print(f"[DEBUG] Environment reset completed for rank {rank}")
             return env
         set_random_seed(seed)
         return _init
@@ -245,7 +245,7 @@ def main():
         # silent init and dont refresh default yaml file because it causes spam and issues with multiprocessing
         eval_env = VecNormalize(SubprocVecEnv([make_eval_env(rank=i, seed=eval_env_seed, silent=True, refresh=False) for i in range(n_eval_envs)], start_method=MULTIPROCESSING_START_METHOD), norm_reward=False, training=False)
         train_env = VecNormalize(SubprocVecEnv([make_env(rank=i, seed=int(flags_dictionary["seed"]), silent=True, refresh=False) for i in range(n_envs)], start_method=MULTIPROCESSING_START_METHOD), norm_reward=False)
-        print("[DEBUG] Training environment created successfully")
+        #print("[DEBUG] Training environment created successfully")
     rtpt_iters = training_timestamps // rtpt_frequency
     save_bm = SaveBestModelCallback(ckpt_path, rgb=flags_dictionary["rgb_exp"])
     eval_callback = EvalCallback(
@@ -326,8 +326,8 @@ def main():
             policy_kwargs=pkwargs,
             verbose=1)
     model.set_logger(new_logger)
-    print(model.policy)
-    print(f"Experiment name: {exp_name}")
+    #print(model.policy)
+    #print(f"Experiment name: {exp_name}")
     print(f"Started {type(model).__name__} training with {n_envs} actors and {n_eval_envs} evaluators...")
 
     if flags_dictionary["pruned_ff_name"] is not None:

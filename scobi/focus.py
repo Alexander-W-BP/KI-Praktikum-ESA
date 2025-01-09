@@ -676,9 +676,9 @@ class Focus():
                 total_reward = reward_distance + reward_orientation
 
                 # Debug-Ausgabe zur Überprüfung
-                print(f"Current Distance: {current_distance:.2f}, Delta Distance: {delta_distance:.2f}, Reward Distance: {reward_distance:.2f}")
+                """ print(f"Current Distance: {current_distance:.2f}, Delta Distance: {delta_distance:.2f}, Reward Distance: {reward_distance:.2f}")
                 print(f"Current Orientation: {current_orientation:.2f}, Orientation Error: {orientation_error:.2f}, Reward Orientation: {reward_orientation:.2f}")
-                print(f"Total Reward: {total_reward:.2f}")
+                print(f"Total Reward: {total_reward:.2f}") """
 
                 return total_reward
 

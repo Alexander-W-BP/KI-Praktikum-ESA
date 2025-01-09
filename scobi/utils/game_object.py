@@ -13,7 +13,7 @@ def get_wrapper_class():
         os.environ["SCOBI_OBJ_EXTRACTOR"] = "OC_Atari"#LunarLander
         print("Set env var 'SCOBI_OBJ_EXTRACTOR' as 'LunarLander'. Other option is 'Noisy_OC_Atari' which can be set manually")
     if os.environ["SCOBI_OBJ_EXTRACTOR"] == "LunarLander":
-        print("LunarLander erfolgreich geladen")
+        #print("LunarLander erfolgreich geladen")
         return LunarLanderObject    
     
     elif os.environ["SCOBI_OBJ_EXTRACTOR"] == "Noisy_OC_Atari":

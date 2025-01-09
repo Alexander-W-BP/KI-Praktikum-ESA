@@ -118,6 +118,7 @@ class Environment(Env):
                 objects = self.extract_all_objects()
             else:    
                 objects = self._wrap_map_order_game_objects(self.oc_env.objects, self.focus.ENV_NAME, self.focus.REWARD_SHAPING)
+            """ ipdb.set_trace() """
             """ print(f"[DEBUG] Objects: {objects}") """
             sco_obs, sco_reward = self.focus.get_feature_vector(objects)
             """ print(f"[DEBUG] Sco Obs: {sco_obs}")
@@ -137,11 +138,9 @@ class Environment(Env):
                 self.ep_env_reward_buffer = 0
                 self.reset_ep_reward = True
                 self.focus.reward_subgoals = 0
-            #print(f"[DEBUG] Reward: {reward}")
-            #print(f"[DEBUG] Sco Reward: {sco_reward}")
             final_reward = self._reward_composition_func(sco_reward, reward)
-            #print(f"[DEBUG] Final Reward: {final_reward}")
-            # self.sco_obs = sco_obs
+            if terminated:
+                print(f"Final reward: {final_reward}\n")
             return sco_obs, final_reward, truncated, terminated, info # 5
         else:
             raise ValueError("scobi> Action not in action space")
