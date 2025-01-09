@@ -107,11 +107,18 @@ class Environment(Env):
             self.logger.GeneralError("Cannot call env.step() before calling env.reset()")
         elif self.action_space.contains(action):
             obs, reward, truncated, terminated, info = self.oc_env.step(action)
+            print(f"Action: {action}")
+            print(f"Raw Reward: {reward}")
+            print(f"Truncated: {truncated}, Terminated: {terminated}")
+            print(f"Info: {info}")
             if self.focus.ENV_NAME == "LunarLander-v5":
                 objects = self.extract_all_objects()
             else:    
                 objects = self._wrap_map_order_game_objects(self.oc_env.objects, self.focus.ENV_NAME, self.focus.REWARD_SHAPING)
             sco_obs, sco_reward = self.focus.get_feature_vector(objects)
+            print(f"Objects: {objects}")
+            print(f"SCO Feature Vector: {sco_obs}")
+            print(f"SCO Reward: {sco_reward}")
             freeze_mask = self.focus.get_current_freeze_mask()
             if self.draw_features:
                 self._obj_obs = self._draw_objects_overlay(obs)
@@ -123,6 +130,8 @@ class Environment(Env):
                 self.ep_env_reward = None
                 self.reset_ep_reward = False
             if terminated or truncated:
+                print(f"Episode beendet: {terminated}")
+                print(f"Episode abgebrochen: {truncated}")
                 self.ep_env_reward = self.ep_env_reward_buffer
                 self.ep_env_reward_buffer = 0
                 self.reset_ep_reward = True

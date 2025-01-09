@@ -35,6 +35,7 @@ class RtptCallback(BaseCallback):
         self.rtpt.start()
 
     def _on_step(self) -> bool:
+        print(f"RTPT Step: {self.model.num_timesteps}")
         self.rtpt.step()
         return True
 
@@ -50,6 +51,7 @@ class TensorboardCallback(BaseCallback):
         super().__init__(verbose)
 
     def _on_step(self) -> bool:
+        print(f"Step: {self.model.num_timesteps}, Envs: {self.training_env.num_envs}")
         ep_rewards = self.training_env.get_attr("ep_env_reward", range(self.n_envs))
         for rew in ep_rewards:
             if rew is not None:
@@ -60,6 +62,8 @@ class TensorboardCallback(BaseCallback):
         buff_list = list(self.buffer)
         if len(buff_list) == 0:
             return
+        mean_reward = np.mean(buff_list)
+        print(f"Mean reward in last rollout: {mean_reward}")
         self.logger.record("rollout/ep_env_rew_mean", np.mean(list(self.buffer)))
 
 
@@ -68,8 +72,6 @@ class SaveBestModelCallback(BaseCallback):
         super(SaveBestModelCallback, self).__init__()
         self.save_path = save_path
         self.rgb = rgb
-        print("Wie bin ich hier gelandet?")
-        print(self.save_path)
         self.vec_path_name = os.path.join(self.save_path, "best_vecnormalize.pkl")
 
     def _init_callback(self) -> None:
@@ -158,7 +160,8 @@ def _get_directory(path, exp_name):
 
 def main():
     flags_dictionary = utils.parser.parser.parse_train()
-
+    # Debugging: Print die geladenen Parameter
+    print(f"Flags Dictionary: {flags_dictionary}")
     exp_name = flags_dictionary["exp_name"]
     n_envs = int(flags_dictionary["environments"])
     n_eval_envs = 4
@@ -168,6 +171,9 @@ def main():
     checkpoint_frequency = 1_000_000
     eval_frequency = 500_000
     rtpt_frequency = 100_000
+
+    # Debugging
+    print(f"Training will run with {n_envs} environments and {n_eval_envs} evaluation environments.")
 
     log_path = _get_directory(Path("resources/training_logs"), exp_name)
     ckpt_path = _get_directory(Path("resources/checkpoints"), exp_name)
